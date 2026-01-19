@@ -13,7 +13,7 @@
     "db:migrate": "pnpm --filter api db:migrate",
     "db:migrate:prod": "pnpm --filter api db:migrate:prod",
     "db:studio": "pnpm --filter api db:studio",
-    "deploy": "pnpm build && pnpm deploy:api && pnpm deploy:web",
+    "deploy:all": "pnpm build && pnpm deploy:api && pnpm deploy:web",
     "deploy:api": "cd packages/api && npx wrangler deploy",
     "deploy:web": "cd packages/web && npm run build && npx wrangler pages deploy .svelte-kit/cloudflare --project-name remesitas-web --branch main --commit-dirty=true",
     "setup:cloudflare": "node scripts/setup-cloudflare.js",
