@@ -11,13 +11,26 @@ const toCache = [
   ...files,
 ];
 
-// Install event - cache assets
+// Install event - cache assets (resilient to individual failures)
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(toCache))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // Cache files individually to avoid failing on single file errors
+      await Promise.all(
+        toCache.map(async (url) => {
+          try {
+            const response = await fetch(url);
+            if (response.ok) {
+              await cache.put(url, response);
+            }
+          } catch {
+            // Ignore individual file cache failures
+            console.warn(`Failed to cache: ${url}`);
+          }
+        })
+      );
+      return self.skipWaiting();
+    })
   );
 });
 
