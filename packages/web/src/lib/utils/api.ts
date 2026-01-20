@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { auth } from '$stores/auth';
 import { get } from 'svelte/store';
+import { getApiBaseUrl } from './config';
 
 interface ApiOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
@@ -16,8 +17,8 @@ interface ApiResponse<T> {
 class ApiClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = '/api') {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string) {
+    this.baseUrl = baseUrl || getApiBaseUrl();
   }
 
   private getAuthHeader(): Record<string, string> {

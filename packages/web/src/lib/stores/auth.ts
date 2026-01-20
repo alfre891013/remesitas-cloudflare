@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import type { User } from '@remesitas/shared';
+import { getApiBaseUrl } from '$utils/config';
 
 interface AuthState {
   user: User | null;
@@ -49,7 +50,7 @@ function createAuthStore() {
       update((s) => ({ ...s, isLoading: true, error: null }));
 
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(`${getApiBaseUrl()}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password }),
@@ -101,7 +102,7 @@ function createAuthStore() {
 
       try {
         if (state.refreshToken) {
-          await fetch('/api/auth/logout', {
+          await fetch(`${getApiBaseUrl()}/auth/logout`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: state.refreshToken }),
@@ -129,7 +130,7 @@ function createAuthStore() {
       if (!state.refreshToken) return false;
 
       try {
-        const res = await fetch('/api/auth/refresh', {
+        const res = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: state.refreshToken }),
@@ -176,7 +177,7 @@ function createAuthStore() {
 
       // Verify token by fetching user data
       try {
-        const res = await fetch('/api/auth/me', {
+        const res = await fetch(`${getApiBaseUrl()}/auth/me`, {
           headers: {
             Authorization: `Bearer ${state.accessToken}`,
           },

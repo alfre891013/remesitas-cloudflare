@@ -8,7 +8,7 @@ const config = {
     adapter: adapter({
       routes: {
         include: ['/*'],
-        exclude: ['<all>'],
+        exclude: ['<all>', '/api/*'],
       },
     }),
     alias: {
