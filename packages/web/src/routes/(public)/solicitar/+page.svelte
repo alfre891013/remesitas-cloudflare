@@ -189,8 +189,8 @@
             </div>
           </div>
 
-          <div>
-            <label class="label">Moneda de entrega</label>
+          <fieldset>
+            <legend class="label">Moneda de entrega</legend>
             <div class="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -209,7 +209,7 @@
                 <p class="text-sm text-gray-500">Moneda estable</p>
               </button>
             </div>
-          </div>
+          </fieldset>
         </div>
 
         {#if calculation}
