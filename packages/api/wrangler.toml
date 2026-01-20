@@ -23,6 +23,8 @@ id = "e7cfb9582b7e4321913d18650e5d9e87"
 # Environment variables (secrets set via wrangler secret put)
 [vars]
 ENVIRONMENT = "development"
+# For local dev, create .dev.vars file with: JWT_SECRET, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL
+# Production secrets are set via: wrangler secret put <NAME>
 
 # Cron triggers for exchange rate updates
 [triggers]

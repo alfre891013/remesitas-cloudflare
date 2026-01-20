@@ -19,6 +19,18 @@ pnpm install
 ```
 
 ### Development
+
+**First-time setup:**
+```bash
+# 1. Create local secrets file
+cp packages/api/.dev.vars.example packages/api/.dev.vars
+# Edit .dev.vars with your values (JWT_SECRET is required)
+
+# 2. Apply local database migrations
+pnpm db:migrate
+```
+
+**Start dev servers:**
 ```bash
 pnpm dev                    # Run all packages (API :8787, Web :5173)
 pnpm --filter api dev       # API only
