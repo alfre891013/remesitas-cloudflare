@@ -1,16 +1,23 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { isAuthenticated, user } from '$stores/auth';
+  import { isAuthenticated, user, authLoading } from '$stores/auth';
+  import { browser } from '$app/environment';
 
-  onMount(() => {
-    // Redirect based on auth state
-    if ($isAuthenticated && $user) {
-      if ($user.rol === 'admin') {
+  // Subscribe to stores for reactivity - use explicit variable declarations
+  let loading = $derived($authLoading);
+  let authenticated = $derived($isAuthenticated);
+  let currentUser = $derived($user);
+
+  // Effect runs when derived values change
+  $effect(() => {
+    if (!browser || loading) return;
+
+    if (authenticated && currentUser) {
+      if (currentUser.rol === 'admin') {
         goto('/admin');
-      } else if ($user.rol === 'repartidor') {
+      } else if (currentUser.rol === 'repartidor') {
         goto('/repartidor');
-      } else if ($user.rol === 'revendedor') {
+      } else if (currentUser.rol === 'revendedor') {
         goto('/revendedor');
       }
     } else {

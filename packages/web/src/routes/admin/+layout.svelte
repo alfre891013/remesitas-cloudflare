@@ -1,9 +1,21 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { isAdmin, authLoading } from '$stores/auth';
+  import { browser } from '$app/environment';
   import Sidebar from '$components/layout/Sidebar.svelte';
   import Header from '$components/layout/Header.svelte';
+
+  // Svelte 5 derived values
+  let loading = $derived($authLoading);
+  let admin = $derived($isAdmin);
+
+  // Redirect non-admin users
+  $effect(() => {
+    if (!browser || loading) return;
+    if (!admin) {
+      goto('/login');
+    }
+  });
 
   const menuItems = [
     {
@@ -43,18 +55,9 @@
     },
   ];
 
-  onMount(() => {
-    if (!$authLoading && !$isAdmin) {
-      goto('/login');
-    }
-  });
-
-  $: if (!$authLoading && !$isAdmin) {
-    goto('/login');
-  }
 </script>
 
-{#if $isAdmin}
+{#if admin}
   <div class="min-h-screen bg-gray-50">
     <Sidebar {menuItems} />
 
