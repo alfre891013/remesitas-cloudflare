@@ -187,7 +187,7 @@ CREATE INDEX IF NOT EXISTS sessions_usuario_idx ON sessions(usuario_id);
 INSERT OR IGNORE INTO usuarios (username, password_hash, nombre, rol, activo, debe_cambiar_password)
 VALUES (
     'admin',
-    '240be518fabd2724ddb6f04eeb9d5b054a0b74a0d0b2b1bff9cb6e9e5c6b9e5a', -- SHA-256 of admin123
+    '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', -- SHA-256 of admin123
     'Administrador',
     'admin',
     1,
