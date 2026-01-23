@@ -9,6 +9,51 @@ import {
   MOVIMIENTO_CONTABLE_TIPOS,
 } from '../constants';
 
+// Re-export phone validation utilities
+export * from './phone';
+
+// ============ Phone Validation Schemas ============
+// US phone: +1 followed by 10 digits (area code 2-9, exchange 2-9 not ending 11)
+export const usPhoneSchema = z
+  .string()
+  .regex(
+    /^\+?1?[2-9]\d{2}[2-9](?!11)\d{6}$/,
+    'Número de teléfono USA inválido. Formato: +1 (XXX) XXX-XXXX'
+  );
+
+// Cuban phone: +53 followed by 8 digits (mobile starts with 5)
+export const cubanPhoneSchema = z
+  .string()
+  .regex(
+    /^\+?53?[5-9]\d{7}$/,
+    'Número de teléfono Cuba inválido. Formato: +53 XXXX XXXX'
+  );
+
+// Either US or Cuban phone
+export const phoneSchema = z
+  .string()
+  .min(8, 'El teléfono debe tener al menos 8 dígitos')
+  .max(20, 'El teléfono no puede tener más de 20 caracteres')
+  .refine(
+    (val) => {
+      const cleaned = val.replace(/[\s\-\(\)\.]/g, '');
+      return (
+        /^\+?1?[2-9]\d{2}[2-9](?!11)\d{6}$/.test(cleaned) ||
+        /^\+?53?[5-9]\d{7}$/.test(cleaned) ||
+        /^\d{8,15}$/.test(cleaned) // Fallback for international
+      );
+    },
+    { message: 'Formato de teléfono inválido' }
+  );
+
+// Email schema
+export const emailSchema = z
+  .string()
+  .email('Email inválido')
+  .max(255, 'Email demasiado largo')
+  .optional()
+  .nullable();
+
 // ============ Auth Validators ============
 export const loginSchema = z.object({
   username: z.string().min(3).max(50),

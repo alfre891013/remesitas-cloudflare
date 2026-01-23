@@ -38,7 +38,7 @@
     {min}
     {max}
     {step}
-    {autocomplete}
+    autocomplete={autocomplete as AutoFill | undefined}
     bind:value
     on:input
     on:change

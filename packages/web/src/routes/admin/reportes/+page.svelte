@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
   import { Button, Input, Select, Badge } from '$components/ui';
   import { apiHelpers } from '$utils/api';
@@ -23,13 +23,14 @@
   let revendedoresData: any[] = [];
   let balanceData: any = null;
 
-  onMount(() => {
+  // Initialize on client-side
+  if (browser) {
     // Set default date range (this month)
     const now = new Date();
     fechaInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     fechaFin = now.toISOString().split('T')[0];
     loadResumen();
-  });
+  }
 
   async function loadResumen() {
     isLoading = true;

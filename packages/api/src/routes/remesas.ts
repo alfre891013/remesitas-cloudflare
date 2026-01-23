@@ -13,6 +13,7 @@ import {
   paginationSchema,
   reportFiltersSchema,
 } from '@remesitas/shared';
+import { createPDFService } from '../services/pdf.service';
 
 export const remesasRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -546,4 +547,49 @@ remesasRoutes.get('/api/calcular', async (c) => {
   const calculo = await remesasService.calcular(monto, tipoEntrega);
 
   return c.json({ success: true, data: calculo });
+});
+
+// ============ Receipt Generation ============
+
+// GET /api/remesas/:id/recibo - Get delivery receipt as HTML
+remesasRoutes.get('/:id/recibo', async (c) => {
+  const db = c.get('db');
+  const id = parseInt(c.req.param('id'));
+  const format = c.req.query('format') || 'html';
+
+  if (isNaN(id)) {
+    return c.json({ success: false, error: 'Invalid ID', message: 'ID inválido' }, 400);
+  }
+
+  const [remesa] = await db.select().from(remesas).where(eq(remesas.id, id)).limit(1);
+
+  if (!remesa) {
+    return c.json({ success: false, error: 'Not Found', message: 'Remesa no encontrada' }, 404);
+  }
+
+  try {
+    const pdfService = createPDFService(db, c.env.STORAGE);
+    const html = await pdfService.generateReceiptHTML(id);
+
+    if (format === 'json') {
+      return c.json({
+        success: true,
+        data: { html },
+      });
+    }
+
+    // Return as HTML document
+    return new Response(html, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Disposition': `inline; filename="recibo-${remesa.codigo}.html"`,
+      },
+    });
+  } catch (error) {
+    console.error('Error generating receipt:', error);
+    return c.json(
+      { success: false, error: 'Generation Failed', message: 'Error al generar recibo' },
+      500
+    );
+  }
 });

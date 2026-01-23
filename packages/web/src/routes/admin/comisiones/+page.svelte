@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
-  import { Table, Badge, Modal, Button, Input } from '$components/ui';
+  import { Table, Badge, Modal, Button, Input, ConfirmModal } from '$components/ui';
   import { apiHelpers } from '$utils/api';
   import { formatCurrency, formatNumber } from '$utils/format';
+  import { toast } from '$stores/toast';
 
   interface Comision {
     id: number;
@@ -25,6 +26,11 @@
   let isSubmitting = false;
   let formError = '';
 
+  // Confirm modal state
+  let showConfirm = false;
+  let confirmComision: Comision | null = null;
+  let isDeleting = false;
+
   // Form data
   let form = {
     nombre: '',
@@ -35,7 +41,10 @@
     activa: true,
   };
 
-  onMount(loadComisiones);
+  // Load on client-side
+  if (browser) {
+    loadComisiones();
+  }
 
   async function loadComisiones() {
     isLoading = true;
@@ -116,25 +125,37 @@
     isSubmitting = false;
   }
 
-  async function handleDelete(comision: Comision) {
-    if (!confirm(`¿Eliminar la comisión "${comision.nombre}"?`)) return;
+  function handleDelete(comision: Comision) {
+    confirmComision = comision;
+    showConfirm = true;
+  }
 
-    const response = await apiHelpers.deleteCommission(comision.id);
+  async function confirmDelete() {
+    if (!confirmComision) return;
+    isDeleting = true;
+
+    const response = await apiHelpers.deleteCommission(confirmComision.id);
 
     if (response.success) {
+      toast.success(`Comisión "${confirmComision.nombre}" eliminada`);
+      showConfirm = false;
+      confirmComision = null;
       await loadComisiones();
     } else {
-      alert(response.message || 'Error al eliminar');
+      toast.error(response.message || 'Error al eliminar');
     }
+
+    isDeleting = false;
   }
 
   async function toggleActive(comision: Comision) {
     const response = await apiHelpers.updateCommission(comision.id, { activa: !comision.activa });
 
     if (response.success) {
+      toast.success(`Comisión ${comision.activa ? 'desactivada' : 'activada'}`);
       await loadComisiones();
     } else {
-      alert(response.message || 'Error al actualizar');
+      toast.error(response.message || 'Error al actualizar');
     }
   }
 
@@ -368,3 +389,15 @@
     <Button variant="secondary" on:click={() => (showModal = false)}>Cancelar</Button>
   </svelte:fragment>
 </Modal>
+
+<!-- Delete Confirm Modal -->
+<ConfirmModal
+  bind:open={showConfirm}
+  title="Eliminar comisión"
+  message={confirmComision ? `¿Eliminar la comisión "${confirmComision.nombre}"?` : ''}
+  confirmText="Eliminar"
+  variant="danger"
+  loading={isDeleting}
+  on:confirm={confirmDelete}
+  on:cancel={() => { showConfirm = false; confirmComision = null; }}
+/>

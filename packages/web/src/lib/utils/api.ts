@@ -77,8 +77,7 @@ class ApiClient {
       }
 
       return data;
-    } catch (error) {
-      console.error('API Error:', error);
+    } catch {
       return {
         success: false,
         error: 'Network Error',
@@ -132,8 +131,7 @@ class ApiClient {
       });
 
       return await response.json();
-    } catch (error) {
-      console.error('Upload Error:', error);
+    } catch {
       return {
         success: false,
         error: 'Upload Error',
@@ -144,6 +142,7 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+export const apiClient = api; // Alias for backwards compatibility
 
 // Typed API helpers
 export const apiHelpers = {

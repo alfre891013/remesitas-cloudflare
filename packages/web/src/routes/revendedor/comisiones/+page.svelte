@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
   import { Table, Badge, Button, Modal } from '$components/ui';
   import { apiHelpers } from '$utils/api';
@@ -31,7 +31,10 @@
   let showDetailModal = false;
   let selectedPago: Pago | null = null;
 
-  onMount(loadData);
+  // Load on client-side
+  if (browser) {
+    loadData();
+  }
 
   async function loadData() {
     isLoading = true;

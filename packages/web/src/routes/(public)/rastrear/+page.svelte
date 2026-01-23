@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import { apiHelpers } from '$utils/api';
   import { formatNumber, formatDateTime, getEstadoLabel } from '$utils/format';
 
@@ -18,14 +18,14 @@
     fecha_entrega: string | null;
   } | null = null;
 
-  onMount(() => {
-    // Check URL for codigo param
+  // Check URL for codigo param on client-side
+  if (browser) {
     const urlCodigo = $page.url.searchParams.get('codigo');
     if (urlCodigo) {
       codigo = urlCodigo;
       handleTrack();
     }
-  });
+  }
 
   async function handleTrack() {
     if (!codigo.trim()) return;

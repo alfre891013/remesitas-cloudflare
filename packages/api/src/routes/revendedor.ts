@@ -3,10 +3,12 @@ import { eq, desc, and, sql, gte } from 'drizzle-orm';
 import type { Env, Variables } from '../types';
 import { authMiddleware, revendedorMiddleware } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
+import { apiRateLimiter } from '../middleware/rate-limit';
 import { RemesasService } from '../services/remesas.service';
 import { PushService } from '../services/notificaciones.service';
-import { remesas, usuarios, pagosRevendedor } from '../db/schema';
+import { remesas, usuarios, pagosRevendedor, movimientosContables } from '../db/schema';
 import { remesaCreateSchema, calculatorRevendedorSchema } from '@remesitas/shared';
+import { parseMonetaryAmount, parsePagination, parseId } from '../utils/validators';
 
 export const revendedorRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -133,6 +135,15 @@ revendedorRoutes.post('/remesas', validateBody(remesaCreateSchema), async (c) =>
   const auth = c.get('auth')!;
   const body = await c.req.json();
 
+  // Validate amount bounds
+  const monto = parseMonetaryAmount(body.monto_envio, { min: 1, max: 10000 });
+  if (monto === null) {
+    return c.json(
+      { success: false, error: 'Invalid Input', message: 'El monto debe ser entre $1 y $10,000' },
+      400
+    );
+  }
+
   // Get reseller's info
   const [user] = await db
     .select({
@@ -145,27 +156,24 @@ revendedorRoutes.post('/remesas', validateBody(remesaCreateSchema), async (c) =>
 
   const comisionRevendedor = user?.comision_revendedor || 0;
   const usaLogistica = user?.usa_logistica ?? true;
+  const tipoEntrega = body.tipo_entrega === 'USD' ? 'USD' : 'MN';
 
   const remesasService = new RemesasService(db);
 
   // Calculate amounts for reseller
-  const calculo = await remesasService.calcularRevendedor(
-    body.monto_envio,
-    body.tipo_entrega || 'MN',
-    comisionRevendedor
-  );
+  const calculo = await remesasService.calcularRevendedor(monto, tipoEntrega, comisionRevendedor);
 
   // Create remittance
   const remesa = await remesasService.crear(
     {
-      tipo_entrega: body.tipo_entrega || 'MN',
-      remitente_nombre: body.remitente_nombre,
-      remitente_telefono: body.remitente_telefono,
-      beneficiario_nombre: body.beneficiario_nombre,
-      beneficiario_telefono: body.beneficiario_telefono,
-      beneficiario_direccion: body.beneficiario_direccion,
+      tipo_entrega: tipoEntrega,
+      remitente_nombre: body.remitente_nombre.trim(),
+      remitente_telefono: body.remitente_telefono.trim(),
+      beneficiario_nombre: body.beneficiario_nombre.trim(),
+      beneficiario_telefono: body.beneficiario_telefono.trim(),
+      beneficiario_direccion: body.beneficiario_direccion.trim(),
       monto_envio: calculo.monto_envio,
-      tasa_cambio: body.tasa_cambio || calculo.tasa_cambio,
+      tasa_cambio: calculo.tasa_cambio,
       monto_entrega: calculo.monto_entrega,
       moneda_entrega: calculo.moneda_entrega,
       comision_porcentaje: calculo.comision_porcentaje,
@@ -175,33 +183,46 @@ revendedorRoutes.post('/remesas', validateBody(remesaCreateSchema), async (c) =>
       comision_plataforma: calculo.comision_plataforma,
       estado: 'pendiente',
       es_solicitud: false,
-      notas: body.notas || null,
+      notas: body.notas?.trim() || null,
       revendedor_id: auth.userId,
     },
     auth.userId
   );
 
-  // Update reseller's pending balance based on usa_logistica
-  if (usaLogistica) {
+  // Always record commission in accounting for audit trail
+  if (calculo.comision_plataforma > 0) {
+    await db.insert(movimientosContables).values({
+      tipo: 'ingreso',
+      concepto: `Comisión revendedor remesa ${remesa.codigo}`,
+      monto: calculo.comision_plataforma,
+      remesa_id: remesa.id,
+      usuario_id: auth.userId,
+    });
+  }
+
+  // Update reseller's pending balance using atomic operation
+  // This is what they owe us (if using our logistics) or earned (if using their own)
+  if (usaLogistica && calculo.comision_plataforma > 0) {
     // Reseller uses our logistics - they owe us the platform commission
     await db
       .update(usuarios)
       .set({ saldo_pendiente: sql`saldo_pendiente + ${calculo.comision_plataforma}` })
       .where(eq(usuarios.id, auth.userId));
   }
-  // If not using logistics, the commission structure is different - managed externally
+  // Note: If not using logistics (usa_logistica=false), reseller handles payment collection
+  // themselves, so no balance tracking needed - commission is recorded in contables only
 
-  // Notify admins via push
-  try {
-    const vapidConfig = {
-      publicKey: c.env.VAPID_PUBLIC_KEY || '',
-      privateKey: c.env.VAPID_PRIVATE_KEY || '',
-      email: c.env.VAPID_EMAIL || '',
-    };
+  // Notify admins via push (non-blocking)
+  const vapidConfig = {
+    publicKey: c.env.VAPID_PUBLIC_KEY || '',
+    privateKey: c.env.VAPID_PRIVATE_KEY || '',
+    email: c.env.VAPID_EMAIL || '',
+  };
+  if (vapidConfig.publicKey && vapidConfig.privateKey) {
     const pushService = new PushService(db, vapidConfig);
-    await pushService.pushNuevaRemesaAdmin(remesa);
-  } catch (e) {
-    console.error('Push notification failed:', e);
+    pushService.pushNuevaRemesaAdmin(remesa).catch(() => {
+      // Silently ignore push notification failures
+    });
   }
 
   return c.json(

@@ -2,13 +2,18 @@ import { Hono } from 'hono';
 import { eq, and, desc } from 'drizzle-orm';
 import type { Env, Variables } from '../types';
 import { validateBody } from '../middleware/validate';
+import { publicRateLimiter } from '../middleware/rate-limit';
 import { RemesasService } from '../services/remesas.service';
 import { TasasService } from '../services/tasas.service';
 import { PushService } from '../services/notificaciones.service';
 import { remesas, tasasCambio } from '../db/schema';
-import { remesaCreateSchema, remesaTrackSchema, calculatorSchema } from '@remesitas/shared';
+import { remesaCreateSchema, remesaTrackSchema, calculatorSchema, SYSTEM_USER_ID } from '@remesitas/shared';
+import { parseMonetaryAmount, parseSearchQuery } from '../utils/validators';
 
 export const publicoRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+// Apply rate limiting to all public routes
+publicoRoutes.use('*', publicRateLimiter);
 
 // GET /api/publico/tasas - Get public exchange rates
 publicoRoutes.get('/tasas', async (c) => {
@@ -38,15 +43,17 @@ publicoRoutes.get('/tasas', async (c) => {
 publicoRoutes.get('/calcular-entrega', async (c) => {
   const db = c.get('db');
   const query = c.req.query();
-  const monto = parseFloat(query.monto || '0');
-  const tipoEntrega = (query.tipo_entrega || 'MN') as 'MN' | 'USD';
 
-  if (monto <= 0) {
+  // Validate and parse amount with bounds
+  const monto = parseMonetaryAmount(query.monto, { min: 1, max: 10000 });
+  if (monto === null) {
     return c.json(
-      { success: false, error: 'Invalid Input', message: 'El monto debe ser mayor a 0' },
+      { success: false, error: 'Invalid Input', message: 'El monto debe ser entre $1 y $10,000' },
       400
     );
   }
+
+  const tipoEntrega = query.tipo_entrega === 'USD' ? 'USD' : 'MN';
 
   const remesasService = new RemesasService(db);
   const calculo = await remesasService.calcularPublico(monto, tipoEntrega);
@@ -62,26 +69,30 @@ publicoRoutes.post('/solicitar', validateBody(remesaCreateSchema), async (c) => 
   const db = c.get('db');
   const body = await c.req.json();
 
+  // Validate amount bounds
+  const monto = parseMonetaryAmount(body.monto_envio, { min: 1, max: 10000 });
+  if (monto === null) {
+    return c.json(
+      { success: false, error: 'Invalid Input', message: 'El monto debe ser entre $1 y $10,000' },
+      400
+    );
+  }
+
   const remesasService = new RemesasService(db);
+  const tipoEntrega = body.tipo_entrega === 'USD' ? 'USD' : 'MN';
 
   // Calculate amounts
-  const calculo = await remesasService.calcularPublico(
-    body.monto_envio,
-    body.tipo_entrega || 'MN'
-  );
+  const calculo = await remesasService.calcularPublico(monto, tipoEntrega);
 
-  // For public requests, we need a system user ID (1 = admin)
-  const systemUserId = 1;
-
-  // Create remittance as a request (solicitud)
+  // Create remittance as a request (solicitud) using system user
   const remesa = await remesasService.crear(
     {
-      tipo_entrega: body.tipo_entrega || 'MN',
-      remitente_nombre: body.remitente_nombre,
-      remitente_telefono: body.remitente_telefono,
-      beneficiario_nombre: body.beneficiario_nombre,
-      beneficiario_telefono: body.beneficiario_telefono,
-      beneficiario_direccion: body.beneficiario_direccion,
+      tipo_entrega: tipoEntrega,
+      remitente_nombre: body.remitente_nombre.trim(),
+      remitente_telefono: body.remitente_telefono.trim(),
+      beneficiario_nombre: body.beneficiario_nombre.trim(),
+      beneficiario_telefono: body.beneficiario_telefono.trim(),
+      beneficiario_direccion: body.beneficiario_direccion.trim(),
       monto_envio: calculo.monto_envio,
       tasa_cambio: calculo.tasa_cambio,
       monto_entrega: calculo.monto_entrega,
@@ -92,22 +103,22 @@ publicoRoutes.post('/solicitar', validateBody(remesaCreateSchema), async (c) => 
       total_cobrado: calculo.total_cobrado,
       estado: 'solicitud',
       es_solicitud: true,
-      notas: body.notas || null,
+      notas: body.notas?.trim() || null,
     },
-    systemUserId
+    SYSTEM_USER_ID
   );
 
-  // Notify admins via push
-  try {
-    const vapidConfig = {
-      publicKey: c.env.VAPID_PUBLIC_KEY || '',
-      privateKey: c.env.VAPID_PRIVATE_KEY || '',
-      email: c.env.VAPID_EMAIL || '',
-    };
+  // Notify admins via push (non-blocking)
+  const vapidConfig = {
+    publicKey: c.env.VAPID_PUBLIC_KEY || '',
+    privateKey: c.env.VAPID_PRIVATE_KEY || '',
+    email: c.env.VAPID_EMAIL || '',
+  };
+  if (vapidConfig.publicKey && vapidConfig.privateKey) {
     const pushService = new PushService(db, vapidConfig);
-    await pushService.pushNuevaSolicitudAdmin(remesa);
-  } catch (e) {
-    console.error('Push notification failed:', e);
+    pushService.pushNuevaSolicitudAdmin(remesa).catch(() => {
+      // Silently ignore push notification failures
+    });
   }
 
   return c.json(

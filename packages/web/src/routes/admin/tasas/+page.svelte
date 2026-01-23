@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
   import { Table, Badge, Modal, Button, Input } from '$components/ui';
   import { apiHelpers } from '$utils/api';
   import { formatNumber, formatDateTime } from '$utils/format';
+  import { toast } from '$stores/toast';
 
   interface TasaCambio {
     id: number;
@@ -36,7 +37,10 @@
   // Preview modal
   let showPreviewModal = false;
 
-  onMount(loadTasas);
+  // Load on client-side
+  if (browser) {
+    loadTasas();
+  }
 
   async function loadTasas() {
     isLoading = true;
@@ -63,7 +67,7 @@
       externalRates = response.data.rates || [];
       showPreviewModal = true;
     } else {
-      alert(response.message || 'Error al obtener tasas externas');
+      toast.error(response.message || 'Error al obtener tasas externas');
     }
 
     isFetching = false;
@@ -75,10 +79,11 @@
     const response = await apiHelpers.fetchExternalRates();
 
     if (response.success) {
+      toast.success('Tasas aplicadas correctamente');
       showPreviewModal = false;
       await loadTasas();
     } else {
-      alert(response.message || 'Error al aplicar tasas');
+      toast.error(response.message || 'Error al aplicar tasas');
     }
 
     isFetching = false;
@@ -102,10 +107,11 @@
     });
 
     if (response.success) {
+      toast.success('Tasa actualizada correctamente');
       showEditModal = false;
       await loadTasas();
     } else {
-      alert(response.message || 'Error al actualizar');
+      toast.error(response.message || 'Error al actualizar');
     }
 
     isUpdating = false;

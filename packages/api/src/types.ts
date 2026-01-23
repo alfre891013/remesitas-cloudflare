@@ -20,6 +20,13 @@ export interface Env {
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_EMAIL: string;
+  // Email providers
+  RESEND_API_KEY: string;
+  SENDGRID_API_KEY: string;
+  EMAIL_FROM: string;
+  EMAIL_FROM_NAME: string;
+  // Base URL
+  URL_BASE: string;
   // Environment
   ENVIRONMENT: string;
 }

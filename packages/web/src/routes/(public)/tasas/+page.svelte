@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import { apiHelpers } from '$utils/api';
   import { formatNumber, formatRelativeTime } from '$utils/format';
 
@@ -35,9 +35,10 @@
     CLA: '🇨🇺',
   };
 
-  onMount(async () => {
-    await loadRates();
-  });
+  // Load on client-side
+  if (browser) {
+    loadRates();
+  }
 
   async function loadRates() {
     isLoading = true;

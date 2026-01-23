@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
   import { Badge, Modal, Button, Textarea } from '$components/ui';
   import { apiHelpers } from '$utils/api';
   import { formatCurrency, formatNumber, formatDateTime, formatPhone, getEstadoLabel } from '$utils/format';
+  import { toast } from '$stores/toast';
 
   interface DashboardStats {
     entregas_pendientes: number;
@@ -44,7 +45,10 @@
   let activeTab: 'pendientes' | 'historial' = 'pendientes';
   let historial: Remesa[] = [];
 
-  onMount(loadData);
+  // Load on client-side
+  if (browser) {
+    loadData();
+  }
 
   async function loadData() {
     isLoading = true;
@@ -105,7 +109,7 @@
     const response = await apiHelpers.markDelivered(selectedRemesa.id, deliveryNotes || undefined);
 
     if (!response.success) {
-      alert(response.message || 'Error al marcar como entregada');
+      toast.error(response.message || 'Error al marcar como entregada');
       isDelivering = false;
       return;
     }
@@ -117,6 +121,7 @@
       await apiHelpers.uploadDeliveryPhoto(selectedRemesa.id, formData);
     }
 
+    toast.success('Entrega registrada correctamente');
     showDeliveryModal = false;
     await loadData();
     isDelivering = false;

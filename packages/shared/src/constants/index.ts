@@ -1,3 +1,6 @@
+// Re-export Cuba geography
+export * from './cuba-geography';
+
 // User roles
 export const ROLES = {
   ADMIN: 'admin',
@@ -128,3 +131,96 @@ export const FALLBACK_RATIOS = {
   EUR: 1.05, // EUR = USD * 1.05
   MLC: 0.7, // MLC = USD * 0.70
 } as const;
+
+// Notification types
+export const NOTIFICATION_TYPES = {
+  REMESA_CREADA: 'REMESA_CREADA',
+  REMESA_APROBADA: 'REMESA_APROBADA',
+  REMESA_EN_PROCESO: 'REMESA_EN_PROCESO',
+  REMESA_ENTREGADA: 'REMESA_ENTREGADA',
+  NUEVA_SOLICITUD_ADMIN: 'NUEVA_SOLICITUD_ADMIN',
+  NUEVA_ASIGNACION_REPARTIDOR: 'NUEVA_ASIGNACION_REPARTIDOR',
+  PAGO_RECIBIDO: 'PAGO_RECIBIDO',
+} as const;
+
+export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];
+
+// Dispute states
+export const DISPUTA_ESTADOS = {
+  ABIERTA: 'abierta',
+  EN_INVESTIGACION: 'en_investigacion',
+  PENDIENTE_CLIENTE: 'pendiente_cliente',
+  RESUELTA: 'resuelta',
+  RECHAZADA: 'rechazada',
+  ESCALADA: 'escalada',
+} as const;
+
+export type DisputaEstado = (typeof DISPUTA_ESTADOS)[keyof typeof DISPUTA_ESTADOS];
+
+// Dispute priorities
+export const DISPUTA_PRIORIDADES = {
+  BAJA: 'baja',
+  NORMAL: 'normal',
+  ALTA: 'alta',
+  URGENTE: 'urgente',
+} as const;
+
+export type DisputaPrioridad = (typeof DISPUTA_PRIORIDADES)[keyof typeof DISPUTA_PRIORIDADES];
+
+// Dispute resolution types
+export const DISPUTA_RESOLUCIONES = {
+  REEMBOLSO_TOTAL: 'reembolso_total',
+  REEMBOLSO_PARCIAL: 'reembolso_parcial',
+  REENVIO: 'reenvio',
+  COMPENSACION: 'compensacion',
+  SIN_ACCION: 'sin_accion',
+  OTRO: 'otro',
+} as const;
+
+export type DisputaResolucion = (typeof DISPUTA_RESOLUCIONES)[keyof typeof DISPUTA_RESOLUCIONES];
+
+// Invoice states
+export const FACTURA_ESTADOS = {
+  BORRADOR: 'borrador',
+  EMITIDA: 'emitida',
+  PAGADA: 'pagada',
+  CANCELADA: 'cancelada',
+  ANULADA: 'anulada',
+} as const;
+
+export type FacturaEstado = (typeof FACTURA_ESTADOS)[keyof typeof FACTURA_ESTADOS];
+
+// Invoice types
+export const FACTURA_TIPOS = {
+  REMESA: 'remesa',
+  COMISION: 'comision',
+  PAGO_REVENDEDOR: 'pago_revendedor',
+  LIQUIDACION: 'liquidacion',
+} as const;
+
+export type FacturaTipo = (typeof FACTURA_TIPOS)[keyof typeof FACTURA_TIPOS];
+
+// File attachment types
+export const ARCHIVO_TIPOS = {
+  FOTO_ENTREGA: 'foto_entrega',
+  FIRMA: 'firma',
+  COMPROBANTE: 'comprobante',
+  FACTURA_PDF: 'factura_pdf',
+  EVIDENCIA: 'evidencia',
+  OTRO: 'otro',
+} as const;
+
+export type ArchivoTipo = (typeof ARCHIVO_TIPOS)[keyof typeof ARCHIVO_TIPOS];
+
+// Location tracking types
+export const UBICACION_TIPOS = {
+  TRACKING: 'tracking',
+  DELIVERY_START: 'delivery_start',
+  DELIVERY_COMPLETE: 'delivery_complete',
+  MANUAL: 'manual',
+} as const;
+
+export type UbicacionTipo = (typeof UBICACION_TIPOS)[keyof typeof UBICACION_TIPOS];
+
+// System user ID for public operations
+export const SYSTEM_USER_ID = 999999;

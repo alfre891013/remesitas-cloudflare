@@ -11,6 +11,7 @@ import {
   pagosRevendedor,
 } from '../db/schema';
 import { reportFiltersSchema } from '@remesitas/shared';
+import { createPDFService } from '../services/pdf.service';
 
 export const reportesRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -585,4 +586,55 @@ reportesRoutes.get('/exportar', validateQuery(reportFiltersSchema), async (c) =>
       'Content-Disposition': `attachment; filename="${filename}"`,
     },
   });
+});
+
+// ============ PDF Report Generation ============
+
+// GET /api/reportes/pdf - Generate PDF report for a period
+reportesRoutes.get('/pdf', validateQuery(reportFiltersSchema), async (c) => {
+  const db = c.get('db');
+  const auth = c.get('auth')!;
+  const query = c.req.query();
+  const format = query.format || 'html';
+
+  // Default date range: last 30 days
+  const fechaFin = query.fecha_fin || new Date().toISOString().split('T')[0];
+  const defaultStart = new Date();
+  defaultStart.setDate(defaultStart.getDate() - 30);
+  const fechaInicio = query.fecha_inicio || defaultStart.toISOString().split('T')[0];
+
+  // Get user name for report
+  const [user] = await db
+    .select({ nombre: usuarios.nombre })
+    .from(usuarios)
+    .where(eq(usuarios.id, auth.userId))
+    .limit(1);
+
+  const generadoPor = user?.nombre || 'Administrador';
+
+  try {
+    const pdfService = createPDFService(db, c.env.STORAGE);
+    const html = await pdfService.generateReportHTML(fechaInicio, fechaFin, generadoPor);
+
+    if (format === 'json') {
+      return c.json({
+        success: true,
+        data: { html },
+      });
+    }
+
+    // Return as HTML document
+    return new Response(html, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Disposition': `inline; filename="reporte-${fechaInicio}-${fechaFin}.html"`,
+      },
+    });
+  } catch (error) {
+    console.error('Error generating report PDF:', error);
+    return c.json(
+      { success: false, error: 'Generation Failed', message: 'Error al generar reporte' },
+      500
+    );
+  }
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
   import { apiHelpers } from '$utils/api';
   import { formatCurrency, formatNumber } from '$utils/format';
@@ -16,9 +16,10 @@
   let isLoading = true;
   let error: string | null = null;
 
-  onMount(async () => {
-    await loadDashboard();
-  });
+  // Load dashboard on client-side
+  if (browser) {
+    loadDashboard();
+  }
 
   async function loadDashboard() {
     isLoading = true;

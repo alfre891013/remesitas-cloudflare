@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
   import { Table, Badge, Modal, Button, Select, Input } from '$components/ui';
   import { apiHelpers } from '$utils/api';
@@ -50,7 +50,10 @@
     { value: 'cancelada', label: 'Cancelada' },
   ];
 
-  onMount(loadRemesas);
+  // Load on client-side
+  if (browser) {
+    loadRemesas();
+  }
 
   async function loadRemesas() {
     isLoading = true;

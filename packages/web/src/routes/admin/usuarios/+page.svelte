@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
-  import { Table, Badge, Modal, Button, Select, Input } from '$components/ui';
+  import { Table, Badge, Modal, Button, Select, Input, ConfirmModal } from '$components/ui';
   import { apiHelpers } from '$utils/api';
   import { formatDateTime, getRolLabel, formatCurrency, formatNumber } from '$utils/format';
+  import { toast } from '$stores/toast';
 
   interface Usuario {
     id: number;
@@ -49,6 +50,11 @@
     usa_logistica: true,
   };
 
+  // Confirm modal state
+  let showConfirm = false;
+  let confirmUser: Usuario | null = null;
+  let isDeleting = false;
+
   const rolOptions = [
     { value: '', label: 'Todos' },
     { value: 'admin', label: 'Administrador' },
@@ -62,7 +68,10 @@
     { value: 'revendedor', label: 'Revendedor' },
   ];
 
-  onMount(loadUsuarios);
+  // Load on client-side
+  if (browser) {
+    loadUsuarios();
+  }
 
   async function loadUsuarios() {
     isLoading = true;
@@ -170,25 +179,37 @@
     isSubmitting = false;
   }
 
-  async function handleDelete(user: Usuario) {
-    if (!confirm(`¿Está seguro de eliminar a ${user.nombre}?`)) return;
+  function handleDelete(user: Usuario) {
+    confirmUser = user;
+    showConfirm = true;
+  }
 
-    const response = await apiHelpers.deleteUser(user.id);
+  async function confirmDelete() {
+    if (!confirmUser) return;
+    isDeleting = true;
+
+    const response = await apiHelpers.deleteUser(confirmUser.id);
 
     if (response.success) {
+      toast.success(`Usuario ${confirmUser.nombre} eliminado`);
+      showConfirm = false;
+      confirmUser = null;
       await loadUsuarios();
     } else {
-      alert(response.message || 'Error al eliminar');
+      toast.error(response.message || 'Error al eliminar');
     }
+
+    isDeleting = false;
   }
 
   async function toggleActive(user: Usuario) {
     const response = await apiHelpers.updateUser(user.id, { activo: !user.activo });
 
     if (response.success) {
+      toast.success(`Usuario ${user.activo ? 'desactivado' : 'activado'}`);
       await loadUsuarios();
     } else {
-      alert(response.message || 'Error al actualizar');
+      toast.error(response.message || 'Error al actualizar');
     }
   }
 
@@ -454,3 +475,15 @@
     <Button variant="secondary" on:click={() => (showModal = false)}>Cancelar</Button>
   </svelte:fragment>
 </Modal>
+
+<!-- Delete Confirm Modal -->
+<ConfirmModal
+  bind:open={showConfirm}
+  title="Eliminar usuario"
+  message={confirmUser ? `¿Está seguro de eliminar a ${confirmUser.nombre}?` : ''}
+  confirmText="Eliminar"
+  variant="danger"
+  loading={isDeleting}
+  on:confirm={confirmDelete}
+  on:cancel={() => { showConfirm = false; confirmUser = null; }}
+/>

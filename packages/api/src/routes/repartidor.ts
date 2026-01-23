@@ -138,47 +138,57 @@ repartidorRoutes.post(
     const db = c.get('db');
     const auth = c.get('auth')!;
     const id = parseInt(c.req.param('id'));
+
+    if (isNaN(id) || id <= 0) {
+      return c.json(
+        { success: false, error: 'Invalid ID', message: 'ID de remesa inválido' },
+        400
+      );
+    }
+
     const body = await c.req.json();
 
     const remesasService = new RemesasService(db);
-    const remesa = await remesasService.entregar(id, auth.userId, body.notas);
+    const result = await remesasService.entregar(id, auth.userId, body.notas);
 
-    if (!remesa) {
+    if (!result.success) {
       return c.json(
         {
           success: false,
           error: 'Invalid Operation',
-          message: 'No se puede marcar como entregada. Verifique el estado y asignación.',
+          message: result.error,
         },
         400
       );
     }
 
-    // Notify admin via push
-    try {
-      const vapidConfig = {
-        publicKey: c.env.VAPID_PUBLIC_KEY || '',
-        privateKey: c.env.VAPID_PRIVATE_KEY || '',
-        email: c.env.VAPID_EMAIL || '',
-      };
+    const remesa = result.remesa;
+
+    // Notify admin via push (non-blocking)
+    const vapidConfig = {
+      publicKey: c.env.VAPID_PUBLIC_KEY || '',
+      privateKey: c.env.VAPID_PRIVATE_KEY || '',
+      email: c.env.VAPID_EMAIL || '',
+    };
+    if (vapidConfig.publicKey && vapidConfig.privateKey) {
       const pushService = new PushService(db, vapidConfig);
-      await pushService.pushRemesaEntregadaAdmin(remesa);
-    } catch (e) {
-      console.error('Push notification failed:', e);
+      pushService.pushRemesaEntregadaAdmin(remesa).catch(() => {
+        // Silently ignore push notification failures
+      });
     }
 
-    // Notify remitente
-    try {
-      const twilioConfig = {
-        accountSid: c.env.TWILIO_ACCOUNT_SID || '',
-        authToken: c.env.TWILIO_AUTH_TOKEN || '',
-        smsFrom: c.env.TWILIO_SMS_FROM || '',
-        whatsappFrom: c.env.TWILIO_WHATSAPP_FROM || '',
-      };
+    // Notify remitente (non-blocking)
+    const twilioConfig = {
+      accountSid: c.env.TWILIO_ACCOUNT_SID || '',
+      authToken: c.env.TWILIO_AUTH_TOKEN || '',
+      smsFrom: c.env.TWILIO_SMS_FROM || '',
+      whatsappFrom: c.env.TWILIO_WHATSAPP_FROM || '',
+    };
+    if (twilioConfig.accountSid && twilioConfig.authToken) {
       const notifService = new NotificacionesService(db, twilioConfig);
-      await notifService.notificarEntregaRemitente(remesa);
-    } catch (e) {
-      console.error('Notification failed:', e);
+      notifService.notificarEntregaRemitente(remesa).catch(() => {
+        // Silently ignore notification failures
+      });
     }
 
     return c.json({
@@ -265,6 +275,89 @@ repartidorRoutes.post('/remesas/:id/foto', async (c) => {
     console.error('Photo upload error:', error);
     return c.json(
       { success: false, error: 'Upload Failed', message: 'Error al subir la imagen' },
+      500
+    );
+  }
+});
+
+// POST /api/repartidor/remesas/:id/firma - Upload delivery signature
+repartidorRoutes.post('/remesas/:id/firma', async (c) => {
+  const db = c.get('db');
+  const auth = c.get('auth')!;
+  const id = parseInt(c.req.param('id'));
+
+  const [remesa] = await db.select().from(remesas).where(eq(remesas.id, id)).limit(1);
+
+  if (!remesa) {
+    return c.json({ success: false, error: 'Not Found', message: 'Remesa no encontrada' }, 404);
+  }
+
+  // Verify ownership (unless admin)
+  if (auth.rol !== 'admin' && remesa.repartidor_id !== auth.userId) {
+    return c.json(
+      { success: false, error: 'Forbidden', message: 'No tiene permiso para esta remesa' },
+      403
+    );
+  }
+
+  try {
+    const body = await c.req.json();
+
+    // Signature should be a base64 data URL (e.g., "data:image/png;base64,...")
+    if (!body.signature || typeof body.signature !== 'string') {
+      return c.json(
+        { success: false, error: 'Missing Signature', message: 'No se proporcionó firma' },
+        400
+      );
+    }
+
+    // Validate it's a data URL
+    const dataUrlMatch = body.signature.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
+    if (!dataUrlMatch) {
+      return c.json(
+        { success: false, error: 'Invalid Format', message: 'Formato de firma inválido' },
+        400
+      );
+    }
+
+    const imageType = dataUrlMatch[1];
+    const base64Data = dataUrlMatch[2];
+
+    // Decode base64 to binary
+    const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+
+    // Validate size (max 1MB for signatures)
+    if (binaryData.length > 1024 * 1024) {
+      return c.json(
+        { success: false, error: 'File Too Large', message: 'La firma no puede superar 1MB' },
+        400
+      );
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const ext = imageType === 'jpeg' ? 'jpg' : imageType;
+    const filename = `${remesa.codigo}_firma_${timestamp}.${ext}`;
+
+    // Upload to R2
+    await c.env.STORAGE.put(`firmas/${filename}`, binaryData, {
+      httpMetadata: {
+        contentType: `image/${imageType}`,
+      },
+    });
+
+    // Update remesa with signature path
+    await db.update(remesas).set({ firma_entrega: filename }).where(eq(remesas.id, id));
+
+    return c.json({
+      success: true,
+      message: 'Firma guardada correctamente',
+      data: { filename },
+    });
+  } catch (error) {
+    console.error('Signature upload error:', error);
+    return c.json(
+      { success: false, error: 'Upload Failed', message: 'Error al guardar la firma' },
       500
     );
   }

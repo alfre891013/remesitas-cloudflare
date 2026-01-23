@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Header from '$components/layout/Header.svelte';
   import { Button, Input, Select, Textarea } from '$components/ui';
@@ -71,9 +71,10 @@
     { value: 'USD', label: 'Dólares (USD)' },
   ];
 
-  onMount(() => {
+  // Calculate on client-side
+  if (browser) {
     calculateAmount();
-  });
+  }
 
   function handleMontoChange() {
     clearTimeout(calcDebounce);

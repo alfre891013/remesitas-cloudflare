@@ -6,6 +6,7 @@ import { validateBody, validateQuery } from '../middleware/validate';
 import { AuthService } from '../services/auth.service';
 import { TasasService } from '../services/tasas.service';
 import { RemesasService } from '../services/remesas.service';
+import { parseId, parseMonetaryAmount, parsePagination, sanitizeForLike } from '../utils/validators';
 import {
   usuarios,
   remesas,
@@ -161,7 +162,11 @@ adminRoutes.get('/usuarios', validateQuery(paginationSchema), async (c) => {
 
 adminRoutes.get('/usuarios/:id', async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
+  const id = parseId(c.req.param('id'));
+
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de usuario inválido' }, 400);
+  }
 
   const [user] = await db
     .select({
@@ -231,8 +236,12 @@ adminRoutes.post('/usuarios', validateBody(userCreateSchema), async (c) => {
 
 adminRoutes.put('/usuarios/:id', validateBody(userUpdateSchema), async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
+  const id = parseId(c.req.param('id'));
   const body = await c.req.json();
+
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de usuario inválido' }, 400);
+  }
 
   const [existing] = await db
     .select({ id: usuarios.id })
@@ -251,8 +260,12 @@ adminRoutes.put('/usuarios/:id', validateBody(userUpdateSchema), async (c) => {
 
 adminRoutes.delete('/usuarios/:id', async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
+  const id = parseId(c.req.param('id'));
   const auth = c.get('auth')!;
+
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de usuario inválido' }, 400);
+  }
 
   if (id === auth.userId) {
     return c.json({ success: false, error: 'Forbidden', message: 'No puede eliminar su propia cuenta' }, 403);
@@ -266,8 +279,12 @@ adminRoutes.delete('/usuarios/:id', async (c) => {
 
 adminRoutes.post('/usuarios/:id/reset-password', async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
+  const id = parseId(c.req.param('id'));
   const body = await c.req.json();
+
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de usuario inválido' }, 400);
+  }
 
   if (!body.new_password || body.new_password.length < 6) {
     return c.json(
@@ -411,8 +428,12 @@ adminRoutes.post('/comisiones', validateBody(comisionCreateSchema), async (c) =>
 
 adminRoutes.put('/comisiones/:id', validateBody(comisionUpdateSchema), async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
+  const id = parseId(c.req.param('id'));
   const body = await c.req.json();
+
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de comisión inválido' }, 400);
+  }
 
   await db.update(comisiones).set(body).where(eq(comisiones.id, id));
 
@@ -421,7 +442,11 @@ adminRoutes.put('/comisiones/:id', validateBody(comisionUpdateSchema), async (c)
 
 adminRoutes.delete('/comisiones/:id', async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
+  const id = parseId(c.req.param('id'));
+
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de comisión inválido' }, 400);
+  }
 
   await db.delete(comisiones).where(eq(comisiones.id, id));
 
@@ -610,9 +635,13 @@ adminRoutes.get('/solicitudes', async (c) => {
 
 adminRoutes.post('/solicitudes/:id/aprobar', async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
-  const remesasService = new RemesasService(db);
+  const id = parseId(c.req.param('id'));
 
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de solicitud inválido' }, 400);
+  }
+
+  const remesasService = new RemesasService(db);
   const remesa = await remesasService.aprobar(id);
 
   if (!remesa) {
@@ -627,9 +656,13 @@ adminRoutes.post('/solicitudes/:id/aprobar', async (c) => {
 
 adminRoutes.post('/solicitudes/:id/rechazar', async (c) => {
   const db = c.get('db');
-  const id = parseInt(c.req.param('id'));
-  const remesasService = new RemesasService(db);
+  const id = parseId(c.req.param('id'));
 
+  if (!id) {
+    return c.json({ success: false, error: 'Invalid Input', message: 'ID de solicitud inválido' }, 400);
+  }
+
+  const remesasService = new RemesasService(db);
   const remesa = await remesasService.cancelar(id);
 
   if (!remesa) {

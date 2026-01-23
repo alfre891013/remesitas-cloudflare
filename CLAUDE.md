@@ -1,182 +1,138 @@
-# CLAUDE.md - Remesitas Cloudflare
+# CLAUDE.md
 
-This file provides guidance to Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-Remesitas Cloudflare is a modern remittance platform built on Cloudflare's edge stack:
-- **API**: Hono.js on Cloudflare Workers
-- **Frontend**: SvelteKit on Cloudflare Pages
-- **Database**: Cloudflare D1 (SQLite)
-- **Storage**: Cloudflare R2
+Remesitas is a remittance platform for Cuba built on Cloudflare's edge stack:
+- **API**: Hono.js on Cloudflare Workers (`packages/api`)
+- **Frontend**: SvelteKit 5 + TailwindCSS on Cloudflare Pages (`packages/web`)
+- **Database**: Cloudflare D1 (SQLite) with Drizzle ORM
+- **Storage**: Cloudflare R2 (delivery photos)
 - **Cache**: Cloudflare KV
+- **Shared**: TypeScript types, Zod validators, constants (`packages/shared`)
 
 ## Commands
 
-### Install Dependencies
 ```bash
+# Install dependencies
 pnpm install
+
+# First-time setup
+cp packages/api/.dev.vars.example packages/api/.dev.vars  # Then edit with JWT_SECRET
+pnpm db:migrate                                            # Apply local migrations
+
+# Development
+pnpm dev                      # All packages (API :8787, Web :5173)
+pnpm --filter api dev         # API only
+pnpm --filter web dev         # Web only
+
+# Type checking
+pnpm typecheck                # All packages
+pnpm --filter api typecheck   # API only
+pnpm --filter web typecheck   # Web only
+
+# Tests
+pnpm --filter api test        # Run API tests (vitest)
+pnpm --filter api test:watch  # Watch mode
+
+# Database
+pnpm db:migrate               # Apply migrations locally
+pnpm db:migrate:prod          # Apply migrations to production
+pnpm db:studio                # Open Drizzle Studio
+
+# Deploy
+pnpm run deploy:all           # Build and deploy everything
+pnpm run deploy:api           # API only (Workers)
+pnpm run deploy:web           # Web only (Pages)
 ```
-
-### Development
-
-**First-time setup:**
-```bash
-# 1. Create local secrets file
-cp packages/api/.dev.vars.example packages/api/.dev.vars
-# Edit .dev.vars with your values (JWT_SECRET is required)
-
-# 2. Apply local database migrations
-pnpm db:migrate
-```
-
-**Start dev servers:**
-```bash
-pnpm dev                    # Run all packages (API :8787, Web :5173)
-pnpm --filter api dev       # API only
-pnpm --filter web dev       # Web only
-```
-
-### Build
-```bash
-pnpm build                  # Build all packages
-```
-
-### Deploy
-
-**Full Deploy (API + Web):**
-```bash
-pnpm run deploy:all
-```
-
-**Deploy API Only:**
-```bash
-pnpm run deploy:api
-```
-
-**Deploy Web Only:**
-```bash
-pnpm run deploy:web
-```
-
-**Windows Batch Script:**
-```bash
-deploy.bat
-```
-
-### Database
-```bash
-pnpm db:migrate             # Apply migrations locally
-pnpm db:migrate:prod        # Apply migrations to production
-pnpm db:studio              # Open Drizzle Studio
-```
-
-## Production URLs
-
-- **API**: https://remesitas-api.alfre891013.workers.dev
-- **Web**: https://remesitas-web.pages.dev
-- **GitHub**: https://github.com/alfre891013/remesitas-cloudflare
-
-## Cloudflare Resources
-
-| Resource | ID/Name |
-|----------|---------|
-| D1 Database | `remesitas-db` (0ec6a875-8822-4498-8015-1fcf7bba9691) |
-| R2 Bucket | `remesitas-storage` |
-| KV Namespace | `CACHE` (e7cfb9582b7e4321913d18650e5d9e87) |
-| Workers | `remesitas-api` |
-| Pages | `remesitas-web` |
-
-## Secrets (Cloudflare)
-
-Required secrets (set via `wrangler secret put <NAME>`):
-- `JWT_SECRET` - JWT signing key
-- `VAPID_PUBLIC_KEY` - Web Push public key
-- `VAPID_PRIVATE_KEY` - Web Push private key
-- `VAPID_EMAIL` - VAPID contact email
-
-Optional (for notifications):
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_SMS_FROM`
-- `TWILIO_WHATSAPP_FROM`
 
 ## Architecture
 
-### Packages
-```
-packages/
-├── api/          # Hono.js Workers API (94 endpoints)
-│   ├── src/
-│   │   ├── routes/       # API routes by feature
-│   │   ├── services/     # Business logic
-│   │   ├── middleware/   # Auth, validation
-│   │   └── db/           # Drizzle schema
-│   └── wrangler.toml     # Workers config
-├── web/          # SvelteKit frontend (17 pages)
-│   ├── src/
-│   │   ├── routes/       # Pages by role
-│   │   ├── lib/          # Components, stores, utils
-│   │   └── static/       # PWA assets, icons
-│   └── svelte.config.js
-└── shared/       # Shared types & validators
-    └── src/
-        ├── types/
-        ├── constants/
-        └── validators/
-```
+### Monorepo Structure (pnpm workspaces + Turborepo)
+- **packages/api**: Hono.js Workers API with JWT auth via `jose`
+- **packages/web**: SvelteKit 5 with Svelte 5 runes (`$state`, `$derived`, `$effect`)
+- **packages/shared**: Re-exported via `@remesitas/shared`, `@remesitas/shared/types`, etc.
 
-### Database Tables
-- `usuarios` - User accounts with roles
-- `remesas` - Remittance transactions
-- `tasas_cambio` - Exchange rates
-- `comisiones` - Commission rules
-- `pagos_revendedor` - Reseller payments
-- `movimientos_contables` - Accounting ledger
-- `movimientos_efectivo` - Cash movements
-- `configuracion` - Key-value config
-- `suscripciones_push` - Push subscriptions
+### API Routes (`packages/api/src/routes/`)
+Routes organized by feature, each creating a Hono sub-app:
+- `auth.ts` - Login, logout, refresh, password change
+- `admin.ts` - User management, config, commissions, cash flow
+- `remesas.ts` - Remittance CRUD and state transitions
+- `tasas.ts` - Exchange rate management and external fetching
+- `repartidor.ts` - Delivery driver operations
+- `revendedor.ts` - Reseller operations
+- `publico.ts` - Public endpoints (no auth required)
+- `reportes.ts` - Reporting and analytics
 
-## User Roles
+### Middleware (`packages/api/src/middleware/`)
+- `authMiddleware` - JWT verification, sets `c.get('auth')` context
+- `adminMiddleware` - Requires admin role
+- `repartidorMiddleware` - Requires admin or repartidor role
+- `revendedorMiddleware` - Requires admin or revendedor role
+- `validate` - Zod schema validation middleware
 
-- **Admin**: Full system control (`/admin/*`)
-- **Repartidor**: Delivery management (`/repartidor/*`)
-- **Revendedor**: Reseller panel (`/revendedor/*`)
-- **Public**: Request remittances (`/solicitar`, `/rastrear`)
+### Database Schema (`packages/api/src/db/schema.ts`)
+Drizzle ORM schema defines tables: `usuarios`, `remesas`, `tasasCambio`, `comisiones`, `pagosRevendedor`, `movimientosContables`, `movimientosEfectivo`, `configuracion`, `suscripcionesPush`, `sessions`
 
-## Default Credentials
+### Frontend State (`packages/web/src/lib/`)
+- `stores/auth.ts` - Svelte writable store for auth state with localStorage persistence
+- `utils/api.ts` - `ApiClient` class with typed helpers, auto token refresh on 401
+- `utils/config.ts` - API base URL configuration (dev vs prod)
 
-- Username: `admin`
-- Password: `admin123`
+### Remittance Lifecycle
+States: `solicitud` → `pendiente` → `en_proceso` → `entregada` → `facturada` (or `cancelada`)
+- `solicitud`: Public request awaiting approval
+- `pendiente`: Approved, awaiting assignment to repartidor
+- `en_proceso`: Assigned, awaiting delivery
+- `entregada`: Delivered by repartidor
+- `facturada`: Invoiced/closed
 
-## Deploy Checklist
+### User Roles
+- **admin**: Full access, all `/admin/*` routes
+- **repartidor**: Delivery driver, `/repartidor/*` routes, tracks USD/CUP cash balances
+- **revendedor**: Reseller, `/revendedor/*` routes, earns commissions
 
-Before deploying, ensure:
-1. All changes committed to git
-2. `pnpm build` succeeds without errors
-3. wrangler.toml has correct resource IDs
-4. Secrets are set in Cloudflare
+## Key Files
 
-After deploying, verify:
-1. API health: `curl https://remesitas-api.alfre891013.workers.dev/api/tasas`
-2. Web loads: https://remesitas-web.pages.dev
-3. Login works with admin/admin123
-4. No console errors (CSP, service worker)
+| Purpose | Location |
+|---------|----------|
+| API entry point | `packages/api/src/index.ts` |
+| DB schema | `packages/api/src/db/schema.ts` |
+| Auth middleware | `packages/api/src/middleware/auth.ts` |
+| Cron handler | `packages/api/src/scheduled.ts` |
+| Web API client | `packages/web/src/lib/utils/api.ts` |
+| Auth store | `packages/web/src/lib/stores/auth.ts` |
+| Shared types | `packages/shared/src/types/index.ts` |
+| CSP headers | `packages/web/static/_headers` |
+| API proxy | `packages/web/static/_redirects` |
+| Wrangler config | `packages/api/wrangler.toml` |
+
+## Production
+
+- **API**: https://remesitas-api.alfre891013.workers.dev
+- **Web**: https://remesitas-web.pages.dev
+- **Default login**: admin / admin123
+
+### Cloudflare Resources
+- D1 Database: `remesitas-db` (0ec6a875-8822-4498-8015-1fcf7bba9691)
+- R2 Bucket: `remesitas-storage`
+- KV Namespace: `CACHE` (e7cfb9582b7e4321913d18650e5d9e87)
+
+### Required Secrets
+Set via `wrangler secret put <NAME>`:
+- `JWT_SECRET` - JWT signing key (required)
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL` - Web Push (optional)
+- `TWILIO_*` - SMS/WhatsApp notifications (optional)
 
 ## Troubleshooting
 
-### CSP Errors
-The `_headers` file in `packages/web/static/` configures CSP. It allows `'unsafe-eval'` for SvelteKit.
+**CSP Errors**: `packages/web/static/_headers` configures CSP; allows `'unsafe-eval'` for SvelteKit
 
-### Service Worker Errors
-Service worker caches files individually to avoid `addAll()` failures.
+**API 404 in production**: Check `_redirects` proxies `/api/*` to Workers API correctly
 
-### API Proxy
-`_redirects` file proxies `/api/*` to Workers API.
+**Svelte 5 errors**: Use `$state()`, `$derived()`, `$effect()` runes instead of `let` for reactive state. Avoid orphan effects (effects must run during component initialization)
 
-### Node.js Compatibility
-Workers use `nodejs_compat` flag. If issues occur, check wrangler.toml compatibility settings.
+**Node.js APIs in Workers**: `nodejs_compat` flag is enabled in wrangler.toml
 
-## Scheduled Tasks
-
-Exchange rates auto-update every 12 hours via cron: `0 */12 * * *`
+**Exchange rate cron**: Runs every 12 hours (`0 */12 * * *`) via `packages/api/src/scheduled.ts`

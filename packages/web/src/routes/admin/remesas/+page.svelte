@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import Header from '$components/layout/Header.svelte';
-  import { Table, Badge, Modal, Button, Select, Input } from '$components/ui';
+  import { Table, Badge, Modal, Button, Select, Input, ConfirmModal } from '$components/ui';
   import { apiHelpers } from '$utils/api';
   import {
     formatCurrency,
@@ -11,6 +11,7 @@
     getEstadoColor,
     formatPhone,
   } from '$utils/format';
+  import { toast } from '$stores/toast';
 
   interface Remesa {
     id: number;
@@ -61,6 +62,12 @@
   let selectedRepartidorId = '';
   let actionLoading = false;
 
+  // Confirm modals
+  let showApproveConfirm = false;
+  let showCancelConfirm = false;
+  let showInvoiceConfirm = false;
+  let confirmRemesa: Remesa | null = null;
+
   const estadoOptions = [
     { value: '', label: 'Todos' },
     { value: 'solicitud', label: 'Solicitud' },
@@ -71,9 +78,10 @@
     { value: 'cancelada', label: 'Cancelada' },
   ];
 
-  onMount(async () => {
-    await Promise.all([loadRemesas(), loadRepartidores()]);
-  });
+  // Load on client-side
+  if (browser) {
+    Promise.all([loadRemesas(), loadRepartidores()]);
+  }
 
   async function loadRemesas() {
     isLoading = true;
@@ -128,54 +136,79 @@
     );
 
     if (response.success) {
+      toast.success('Remesa asignada correctamente');
       showAssignModal = false;
       await loadRemesas();
     } else {
-      alert(response.message || 'Error al asignar');
+      toast.error(response.message || 'Error al asignar');
     }
     actionLoading = false;
   }
 
-  async function handleApprove(remesa: Remesa) {
-    if (!confirm('¿Aprobar esta solicitud?')) return;
+  function handleApprove(remesa: Remesa) {
+    confirmRemesa = remesa;
+    showApproveConfirm = true;
+  }
+
+  async function confirmApprove() {
+    if (!confirmRemesa) return;
 
     actionLoading = true;
-    const response = await apiHelpers.approveRemesa(remesa.id);
+    const response = await apiHelpers.approveRemesa(confirmRemesa.id);
 
     if (response.success) {
+      toast.success('Solicitud aprobada');
+      showApproveConfirm = false;
+      confirmRemesa = null;
       await loadRemesas();
     } else {
-      alert(response.message || 'Error al aprobar');
+      toast.error(response.message || 'Error al aprobar');
     }
     actionLoading = false;
   }
 
-  async function handleCancel(remesa: Remesa) {
-    if (!confirm('¿Está seguro de cancelar esta remesa?')) return;
+  function handleCancel(remesa: Remesa) {
+    confirmRemesa = remesa;
+    showCancelConfirm = true;
+  }
+
+  async function confirmCancel() {
+    if (!confirmRemesa) return;
 
     actionLoading = true;
-    const response = await apiHelpers.cancelRemesa(remesa.id);
+    const response = await apiHelpers.cancelRemesa(confirmRemesa.id);
 
     if (response.success) {
+      toast.success('Remesa cancelada');
+      showCancelConfirm = false;
+      confirmRemesa = null;
       await loadRemesas();
       showDetailModal = false;
     } else {
-      alert(response.message || 'Error al cancelar');
+      toast.error(response.message || 'Error al cancelar');
     }
     actionLoading = false;
   }
 
-  async function handleInvoice(remesa: Remesa) {
-    if (!confirm('¿Marcar como facturada?')) return;
+  function handleInvoice(remesa: Remesa) {
+    confirmRemesa = remesa;
+    showInvoiceConfirm = true;
+  }
+
+  async function confirmInvoice() {
+    if (!confirmRemesa) return;
 
     actionLoading = true;
-    const response = await apiHelpers.invoiceRemesa(remesa.id);
+    const response = await apiHelpers.invoiceRemesa(confirmRemesa.id);
 
     if (response.success) {
+      toast.success('Remesa facturada');
+      showInvoiceConfirm = false;
+      confirmRemesa = null;
       await loadRemesas();
       showDetailModal = false;
     } else {
-      alert(response.message || 'Error al facturar');
+      toast.error(response.message || 'Error al facturar');
     }
     actionLoading = false;
   }
@@ -533,3 +566,39 @@
     <Button variant="secondary" on:click={() => (showAssignModal = false)}>Cancelar</Button>
   </svelte:fragment>
 </Modal>
+
+<!-- Approve Confirm Modal -->
+<ConfirmModal
+  bind:open={showApproveConfirm}
+  title="Aprobar solicitud"
+  message={confirmRemesa ? `¿Aprobar la solicitud ${confirmRemesa.codigo}?` : ''}
+  confirmText="Aprobar"
+  variant="primary"
+  loading={actionLoading}
+  on:confirm={confirmApprove}
+  on:cancel={() => { showApproveConfirm = false; confirmRemesa = null; }}
+/>
+
+<!-- Cancel Confirm Modal -->
+<ConfirmModal
+  bind:open={showCancelConfirm}
+  title="Cancelar remesa"
+  message={confirmRemesa ? `¿Está seguro de cancelar la remesa ${confirmRemesa.codigo}?` : ''}
+  confirmText="Cancelar remesa"
+  variant="danger"
+  loading={actionLoading}
+  on:confirm={confirmCancel}
+  on:cancel={() => { showCancelConfirm = false; confirmRemesa = null; }}
+/>
+
+<!-- Invoice Confirm Modal -->
+<ConfirmModal
+  bind:open={showInvoiceConfirm}
+  title="Facturar remesa"
+  message={confirmRemesa ? `¿Marcar la remesa ${confirmRemesa.codigo} como facturada?` : ''}
+  confirmText="Facturar"
+  variant="primary"
+  loading={actionLoading}
+  on:confirm={confirmInvoice}
+  on:cancel={() => { showInvoiceConfirm = false; confirmRemesa = null; }}
+/>

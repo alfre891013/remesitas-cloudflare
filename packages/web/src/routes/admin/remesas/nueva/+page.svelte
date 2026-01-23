@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Header from '$components/layout/Header.svelte';
   import { Button, Input, Select, Textarea } from '$components/ui';
